@@ -3,6 +3,7 @@ CLAUDE.local.md
 apps/desktop/.env.windows
 apps/desktop/.env.macos
 apps/desktop/.env.linux
+odd/
 apps/desktop/*.p12
 node_modules/
 lib/

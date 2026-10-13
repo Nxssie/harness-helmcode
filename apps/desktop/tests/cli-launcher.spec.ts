@@ -1,14 +1,21 @@
 /** Installed launcher scripts preserve terminal invocation through a minimal runtime fixture. */
 
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { copyFileSync, mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, mkdtempSync, realpathSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { expect, it, onTestFinished } from 'vitest'
 import { prepareDesktopCli } from '../scripts/prepare-cli.ts'
 
-function fixture() {
+type LauncherPlatform = 'darwin' | 'win32' | 'linux'
+
+function hostLauncherPlatform(): LauncherPlatform {
+  if (process.platform === 'win32') return 'win32'
+  return process.platform === 'darwin' ? 'darwin' : 'linux'
+}
+
+function fixture(platform: LauncherPlatform = hostLauncherPlatform()) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'dsh-cli-launcher-')))
   const children: ChildProcessWithoutNullStreams[] = []
   const exits: Promise<unknown>[] = []
@@ -19,12 +26,13 @@ function fixture() {
     await Promise.allSettled(exits)
     await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
   })
-  const application = join(root, 'Application español with spaces.app')
-  const platform = process.platform === 'win32' ? 'win32' : 'darwin'
+  const application = join(root, platform === 'darwin' ? 'Application español with spaces.app' : 'Application español with spaces')
   const resources = join(application, ...platform === 'darwin' ? ['Contents', 'Resources'] : ['resources'])
   const cli = join(resources, 'runtime', 'cli')
   prepareDesktopCli(cli, platform)
-  const electron = join(application, ...platform === 'darwin' ? ['Contents', 'MacOS', 'Helmcode'] : ['Helmcode.exe'])
+  const electron = join(application, ...platform === 'darwin'
+    ? ['Contents', 'MacOS', 'Helmcode']
+    : platform === 'win32' ? ['Helmcode.exe'] : ['Helmcode'])
   mkdirSync(dirname(electron), { recursive: true })
   if (platform === 'win32') copyFileSync(process.execPath, electron)
   else symlinkSync(process.execPath, electron)
@@ -71,6 +79,27 @@ it('preserves common arguments, cwd, environment, binary input, stderr and exit 
   expect(await run.closed, run.stderr()).toBe(23)
   expect(JSON.parse(run.stdout())).toEqual({ args, cwd: f.root, value: 'kept', nodeMode: '1', input: input.toString('hex') })
   expect(run.stderr()).toBe('separate stderr\n')
+})
+
+it.skipIf(process.platform === 'win32')('marks the copied launcher executable', () => {
+  const f = fixture()
+  expect(statSync(f.command).mode & 0o111).toBe(0o111)
+})
+
+it.skipIf(process.platform === 'win32')('runs the Linux layout through the application-root executable', async () => {
+  const f = fixture('linux')
+  const run = f.start(['install', '--profile', 'desktop'])
+  run.child.stdin.end()
+  expect(await run.closed, run.stderr()).toBe(23)
+  expect(JSON.parse(run.stdout())).toMatchObject({ args: ['install', '--profile', 'desktop'], nodeMode: '1' })
+})
+
+it.skipIf(process.platform === 'win32')('runs the macOS bundle layout through the MacOS executable', async () => {
+  const f = fixture('darwin')
+  const run = f.start(['install', '--profile', 'desktop'])
+  run.child.stdin.end()
+  expect(await run.closed, run.stderr()).toBe(23)
+  expect(JSON.parse(run.stdout())).toMatchObject({ args: ['install', '--profile', 'desktop'], nodeMode: '1' })
 })
 
 it.skipIf(process.platform === 'win32')('resolves chained command symlinks without expanding argument contents', async () => {

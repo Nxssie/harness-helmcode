@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { DesktopPlatformView, platformBounds } from '../src/platform-view.ts'
+import { desktopClientHeaders, platformClientHeaders } from '../src/platform-client.ts'
 
 const state = vi.hoisted(() => ({
   views: [] as unknown[], sessions: [] as unknown[], openExternal: vi.fn(async () => {}),
@@ -243,6 +244,36 @@ it('injects deployment headers only at the Platform origin and excludes them fro
   const sender = view().webContents
   expect(manager.bootstrap({ sender, senderFrame: sender.mainFrame }))
     .toEqual({ origin: 'https://platform.deepseek.com', token: 'fixture-secret', locale: 'en_US' })
+  manager.close()
+})
+
+it.each([
+  ['darwin', 'desktop-mac'],
+  ['win32', 'desktop-win'],
+  ['linux', 'desktop-linux'],
+] as const)('reports a %s shell as the %s Platform client', (platform, name) => {
+  expect(desktopClientHeaders(platform)).toEqual({ 'x-client-platform': name })
+  expect(platformClientHeaders(platform, { version: '1.2.3', locale: 'en-US', timezoneOffsetSeconds: -28800 })).toEqual({
+    'x-client-bundle-id': '', 'x-client-platform': name, 'x-client-version': '1.2.3',
+    'x-client-locale': 'en_US', 'x-client-timezone-offset': '-28800',
+  })
+})
+
+it('leaves a non-desktop caller without a desktop client header', () => {
+  expect(desktopClientHeaders(null)).toEqual({})
+  expect(platformClientHeaders(null, { version: '1.2.3', locale: 'en-US', timezoneOffsetSeconds: 0 }))
+    .toMatchObject({ 'x-client-platform': 'web' })
+})
+
+it('injects the Linux Platform client header for a Linux shell', async () => {
+  const owner = Object.assign(new EventEmitter(), {
+    webContents: new EventEmitter(), contentView: { addChildView: vi.fn(), removeChildView: vi.fn() }, isDestroyed: () => false,
+  })
+  const manager = new DesktopPlatformView('/bundled/preload.cjs', () => 'en_US', 'linux')
+  manager.setSession({ origin: 'https://platform.deepseek.com', userId: null, token: 'fixture-secret' })
+  await manager.open(owner, 'usage', bounds)
+  expect(interceptHeaders(1, 'https://platform.deepseek.com/usage', {}))
+    .toMatchObject({ 'x-client-platform': 'desktop-linux' })
   manager.close()
 })
 

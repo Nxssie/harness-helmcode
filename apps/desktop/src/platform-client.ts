@@ -29,21 +29,24 @@ export function platformWireLocale(locale: string): 'zh_CN' | 'en_US' {
 
 /**
  * Identify native desktop API requests; null leaves non-desktop requests unchanged.
+ * `darwin`, `win32`, and `linux` select the `desktop-mac`, `desktop-win`, and `desktop-linux` names.
  * @param platform - Operating system supplied by the desktop composition.
  * @returns Platform request headers shared by account and update-policy clients.
  */
-export function desktopClientHeaders(platform: 'darwin' | 'win32' | null): Record<string, string> {
+export function desktopClientHeaders(platform: 'darwin' | 'win32' | 'linux' | null): Record<string, string> {
   if (platform === null) return {}
-  return { 'x-client-platform': platform === 'win32' ? 'desktop-win' : 'desktop-mac' }
+  return { 'x-client-platform': platform === 'win32' ? 'desktop-win' : platform === 'linux' ? 'desktop-linux' : 'desktop-mac' }
 }
 
 /**
  * Build the Platform request headers for one desktop client check.
+ * `darwin`, `win32`, and `linux` select the `desktop-mac`, `desktop-win`, and `desktop-linux` names; null
+ * reports the web client.
  * @param platform - Operating system hosting the shell.
  * @param client - Sampled build version, language, and UTC offset.
  * @returns Static public request headers without secrets or per-user identifiers.
  */
-export function platformClientHeaders(platform: 'darwin' | 'win32' | null, client: ClientMetadata): Record<string, string> {
+export function platformClientHeaders(platform: 'darwin' | 'win32' | 'linux' | null, client: ClientMetadata): Record<string, string> {
   return {
     'x-client-bundle-id': '',
     'x-client-platform': 'web',

@@ -428,7 +428,8 @@ async function main(): Promise<void> {
     return next.promise
   }
   const platformView = new DesktopPlatformView(join(app.getAppPath(), 'lib', 'preload-platform-account.cjs'),
-    () => locale.id === 'es' ? 'es_ES' : 'en_US', process.platform === 'win32' ? 'win32' : 'darwin')
+    () => locale.id === 'es' ? 'es_ES' : 'en_US',
+    process.platform === 'win32' ? 'win32' : process.platform === 'linux' ? 'linux' : 'darwin')
   const backend = new DesktopBackendController((onFailure) => {
     const hostInspectPort = developmentHostInspectPort(development)
     const host = new DesktopHostProcess(resources.node, resources.dsh, activeProject,

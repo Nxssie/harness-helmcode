@@ -51,7 +51,6 @@ export function createElectronBuilderConfig(
   preparedRuntimeVersion = undefined,
 ) {
   const appId = resolveDesktopAppId(env)
-  const policy = resolveDesktopPolicyEnvironment(env)
   const targetPlatform = env.DSH_DESKTOP_TARGET_PLATFORM
   const resolvedPlatform = targetPlatform ?? hostPlatform
   const resolvedArch = env.DSH_DESKTOP_TARGET_ARCH ?? hostArch
@@ -59,9 +58,12 @@ export function createElectronBuilderConfig(
     throw new Error('desktop package: DSH_DESKTOP_UNSIGNED must be 0 or 1')
   }
   const unsigned = env.DSH_DESKTOP_UNSIGNED === '1'
-  if (unsigned && resolvedPlatform !== 'win32' && resolvedPlatform !== 'darwin') {
-    throw new Error('desktop package: unsigned builds require Windows or macOS')
+  if (resolvedPlatform === 'linux' && !unsigned) throw new Error('desktop package: Linux packaging is unsigned only')
+  if (unsigned && resolvedPlatform !== 'win32' && resolvedPlatform !== 'darwin' && resolvedPlatform !== 'linux') {
+    throw new Error('desktop package: unsigned builds require Windows, macOS, or Linux')
   }
+  // Linux is unsigned only, so it resolves neither the policy service nor the update feed below.
+  const policy = resolvedPlatform === 'linux' ? undefined : resolveDesktopPolicyEnvironment(env)
   const packagesMacOS = targetPlatform === 'darwin' || (targetPlatform === undefined && hostPlatform === 'darwin')
   const packagesWindows = resolvedPlatform === 'win32'
   if (resolvedPlatform === 'win32') installWindowsDirectoryInstaller()
@@ -104,7 +106,7 @@ export function createElectronBuilderConfig(
     protocols: [{ name: 'Helmcode', schemes: ['dsh'] }],
     extraMetadata: {
       dshDesktopAppId: appId,
-      dshMandatoryUpdatePolicy: policy,
+      ...policy === undefined ? {} : { dshMandatoryUpdatePolicy: policy },
       ...buildVersion === productVersion ? {} : { version: buildVersion },
       ...packaged === undefined ? {} : { dshBuildCommit: packaged.commit, dshBuildDirty: packaged.dirty },
     },
@@ -145,7 +147,8 @@ export function createElectronBuilderConfig(
     asarUnpack: unpack,
     extraResources: [
       { from: buildPaths.runtime, to: 'runtime' },
-      { from: fileURLToPath(new URL('../resources/icon-windows.png', import.meta.url)), to: 'icon.png' },
+      // The About dialog reads this packaged icon; Linux takes the neutral artwork its AppImage also carries.
+      { from: fileURLToPath(new URL(resolvedPlatform === 'linux' ? '../resources/icon.png' : '../resources/icon-windows.png', import.meta.url)), to: 'icon.png' },
       // The repository changelog ships with the build: the About dialog reads
       // it from resources, so editing CHANGELOG.md updates the app text.
       { from: fileURLToPath(new URL('../../../CHANGELOG.md', import.meta.url)), to: 'CHANGELOG.md' },
@@ -236,7 +239,10 @@ export function createElectronBuilderConfig(
       target: ['nsis'],
     },
     linux: {
+      icon: fileURLToPath(new URL('../resources/icon.png', import.meta.url)),
       category: 'Development',
+      // The packaged smoke lane launches the unpacked executable by this exact name.
+      executableName: 'Helmcode',
       target: ['AppImage'],
     },
     nsis: {

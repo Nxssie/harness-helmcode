@@ -1,5 +1,6 @@
 import { tmpdir } from 'node:os'
 import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { Arch, Platform } from 'electron-builder'
 import { Packager } from 'app-builder-lib'
 import { describe, expect, it, vi } from 'vitest'
@@ -98,5 +99,54 @@ describe('installer preparation preserves application dependencies', () => {
     }, 'darwin', 'arm64')
     const packaged = new Set(config.files.filter((entry): entry is string => typeof entry === 'string'))
     for (const name of referenced) expect(packaged.has(`lib/${name}`)).toBe(true)
+  })
+})
+
+describe('unsigned Linux packaging', () => {
+  // Linux is unsigned-only and owns no policy, update, or signing settings of its own.
+  const LINUX_ENVIRONMENT = {
+    DSH_DESKTOP_APP_ID: 'com.example.linux',
+    DSH_DESKTOP_TARGET_PLATFORM: 'linux',
+    DSH_DESKTOP_TARGET_ARCH: 'x64',
+    DSH_DESKTOP_UNSIGNED: '1',
+  }
+
+  it('packages the neutral artwork, a fixed executable name, and no release metadata', async () => {
+    const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
+    const config = createElectronBuilderConfig(LINUX_ENVIRONMENT, 'linux', 'x64')
+    const neutralIcon = readFileSync(new URL('../resources/icon.png', import.meta.url))
+    const aboutIcon = config.extraResources.find(resource => resource.to === 'icon.png')
+    expect(aboutIcon).toBeDefined()
+    expect(readFileSync(aboutIcon!.from)).toEqual(neutralIcon)
+    // Linux ships no menu bar tray, so the Windows ICO must not reach the package.
+    expect(config.extraResources.find(resource => resource.to === 'tray.ico')).toBeUndefined()
+    expect(config.linux.icon).toBe(fileURLToPath(new URL('../resources/icon.png', import.meta.url)))
+    expect(config.linux.category).toBe('Development')
+    expect(config.linux.executableName).toBe('Helmcode')
+    expect(config.linux.target).toEqual(['AppImage'])
+    // Linux publishes nowhere, so electron-builder writes no update feed.
+    expect(config.publish).toBeNull()
+    // The packaged manifest must not announce the policy Linux startup rejects.
+    expect('dshMandatoryUpdatePolicy' in config.extraMetadata).toBe(false)
+    expect(config.extraMetadata.dshDesktopAppId).toBe(LINUX_ENVIRONMENT.DSH_DESKTOP_APP_ID)
+    expect(config.artifactName).toBe('deepseek-harness-${version}-${os}-${arch}-unsigned.${ext}')
+  })
+
+  it('rejects a signed Linux configuration without reading release settings', async () => {
+    const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
+    expect(() => createElectronBuilderConfig({ ...LINUX_ENVIRONMENT, DSH_DESKTOP_UNSIGNED: '0' }, 'linux', 'x64'))
+      .toThrow('desktop package: Linux packaging is unsigned only')
+  })
+
+  it('ignores the policy and update settings other platforms require', async () => {
+    const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
+    // Both resolvers reject these settings, so a Linux configuration that reads either one fails here.
+    const config = createElectronBuilderConfig({
+      ...LINUX_ENVIRONMENT,
+      DSH_DESKTOP_AUTO_UPDATE_ENV: 'production',
+      DSH_DESKTOP_MANDATORY_UPDATE_CONFIG: 'not JSON',
+    }, 'linux', 'x64')
+    expect('dshMandatoryUpdatePolicy' in config.extraMetadata).toBe(false)
+    expect(config.publish).toBeNull()
   })
 })

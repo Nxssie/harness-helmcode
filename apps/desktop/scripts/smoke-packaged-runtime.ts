@@ -12,12 +12,16 @@ const { values } = parseArgs({ options: { unsigned: { type: 'boolean', default: 
 const target = resolveDesktopBuildTarget()
 const windows = target === 'win-x64'
 const darwin = target === 'mac-arm64' || target === 'mac-x64'
-if (values.unsigned && !windows && !darwin) throw new Error('desktop smoke: unsigned artifacts require Windows or macOS')
+const linux = target === 'linux-x64'
+if (values.unsigned && !windows && !darwin && !linux) throw new Error('desktop smoke: unsigned artifacts require Windows, macOS, or Linux')
 const artifacts = values.unsigned ? paths.unsignedArtifacts : paths.artifacts
 const application = windows ? join(artifacts, 'win-unpacked')
-  : join(artifacts, target === 'mac-arm64' ? 'mac-arm64' : 'mac', 'Helmcode.app', 'Contents')
-const resources = join(application, windows ? 'resources' : 'Resources')
-const executable = windows ? join(application, 'Helmcode.exe') : join(application, 'MacOS', 'Helmcode')
+  : darwin ? join(artifacts, target === 'mac-arm64' ? 'mac-arm64' : 'mac', 'Helmcode.app', 'Contents')
+    : join(artifacts, 'linux-unpacked')
+const resources = join(application, darwin ? 'Resources' : 'resources')
+const executable = windows ? join(application, 'Helmcode.exe')
+  : darwin ? join(application, 'MacOS', 'Helmcode')
+    : join(application, 'Helmcode')
 const descriptor = await verifyDesktopRuntime(paths.dsh, readDesktopRuntime(paths.dsh).release.version,
   resolveDesktopPackageTarget(target))
 if (windows && !values.unsigned) await verifyWindowsCode(application)

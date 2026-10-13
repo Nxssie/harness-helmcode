@@ -44,6 +44,12 @@ export interface DesktopElectronBuilderConfig {
       readonly signingHashAlgorithms: readonly string[]
     }
   }
+  readonly linux: {
+    readonly icon: string
+    readonly category: 'Development'
+    readonly executableName: 'Helmcode'
+    readonly target: readonly ['AppImage']
+  }
   readonly nsis: {
     readonly include: string
     readonly oneClick: false

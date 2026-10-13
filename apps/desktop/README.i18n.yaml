@@ -6,8 +6,8 @@
   en: 5365a44250a1fc8c
   es: 1b91ed56464aafad
 /nan-harness-desktop/terminal-command:
-  en: bef92953c237363f
-  es: 90a6fece81899da8
+  en: 1d7934bb006ee0c8
+  es: cec291a3bfdabf3d
 /nan-harness-desktop/closing-the-window-and-quitting:
   en: 967c07751d45cb92
   es: 0a379e4935d43b9b
@@ -42,8 +42,8 @@
   en: 4cd8a8da6977928d
   es: fd067d058127c673
 /nan-harness-desktop/package/release-versions:
-  en: dc26d763f4be9068
-  es: 9d66099edfedad2e
+  en: ae4ecc931d7e437f
+  es: bad1836ba5ff6471
 /nan-harness-desktop/package/runtime-file-selection:
   en: de1665dd8ee1cd51
   es: 35d663e087e66729
@@ -59,9 +59,12 @@
 /nan-harness-desktop/package/windows-ev-signing:
   en: cd4beb1e555dae1e
   es: 617d8abc841aad99
+/nan-harness-desktop/package/linux-package:
+  en: 9aa1e9a999df5a5c
+  es: 4d92168e1eda0ad1
 /nan-harness-desktop/updates:
-  en: d0df867b69cbffa4
-  es: 2c29930004a2a8b7
+  en: d45282e70112a5af
+  es: 3e4812283e1f72a9
 /nan-harness-desktop/updates/mandatory-update-policy:
   en: 3c2215f9770e810d
   es: 7e2adfa77df5f496
@@ -72,8 +75,8 @@
   en: 0b225f914142ef0b
   es: b5895f08aff1f3b5
 /nan-harness-desktop/known-limitations:
-  en: 5b77213c86bbcfb6
-  es: 5ca66859ed2ce7ea
+  en: 64e500806bb4a133
+  es: 7e2bef675765162d
 /nan-harness-desktop/dev-note:
   en: ae8c884e29307df8
   es: 5a3c0b85f4229774

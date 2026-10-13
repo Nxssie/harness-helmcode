@@ -7,6 +7,7 @@ import { resolveWindowsPackageSettings } from '../scripts/windows-package-settin
 
 const WINDOWS = { platform: 'win32', arch: 'x64' } as const
 const MACOS = { platform: 'darwin', arch: 'arm64' } as const
+const LINUX = { platform: 'linux', arch: 'x64' } as const
 const POLICY = { DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN: 'https://policy.example.com',
   DSH_DESKTOP_MANDATORY_UPDATE_CONFIG: JSON.stringify({ allowedAuthOrigins: ['https://login.example.com'] }) }
 const RELEASE = { ...POLICY, DSH_DESKTOP_APP_ID: 'com.example.desktop', DOWNLOAD_TEST_ORIGIN: 'https://updates.example.com',
@@ -74,6 +75,51 @@ describe('Desktop local packaging configuration', () => {
       expect(parent.DSH_DESKTOP_WINDOWS_TOKEN_PIN).toBe('stale-pin')
       expect(parent.dsh_desktop_mandatory_update_config).toBe('stale-policy')
     })
+  })
+
+  it('takes the Linux file, ignores the other platform files, and excludes ambient release settings', async () => {
+    await withDirectory(async (directory) => {
+      await writeFile(join(directory, '.env.windows'), 'DSH_DESKTOP_APP_ID=com.example.windows\nDSH_DESKTOP_WINDOWS_TOKEN_PIN=windows-pin\n')
+      await writeFile(join(directory, '.env.macos'), 'DSH_DESKTOP_APP_ID=com.example.mac\nAPPLE_KEYCHAIN_PROFILE=release\n')
+      await writeFile(join(directory, '.env.linux'), 'DSH_DESKTOP_APP_ID=com.example.linux\nDOWNLOAD_TEST_ORIGIN=https://updates.example.com\n')
+      const parent = {
+        PATH: 'build-tools', DSH_DESKTOP_APP_ID: 'com.stale.desktop',
+        DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN: 'https://stale.example.com',
+        DSH_DESKTOP_WINDOWS_TOKEN_PIN: 'stale-pin', APPLE_KEYCHAIN_PROFILE: 'stale-profile',
+        DOWNLOAD_TEST_ORIGIN: 'https://stale.example.com', download_test_release_id: 'b'.repeat(32),
+      }
+      expect(loadDesktopPackageEnvironment('linux', parent, directory)).toEqual({
+        PATH: 'build-tools', DSH_DESKTOP_APP_ID: 'com.example.linux', DOWNLOAD_TEST_ORIGIN: 'https://updates.example.com',
+      })
+      expect(parent.DSH_DESKTOP_WINDOWS_TOKEN_PIN).toBe('stale-pin')
+      expect(parent.APPLE_KEYCHAIN_PROFILE).toBe('stale-profile')
+    })
+  })
+
+  it('requires the Linux file and rejects macOS-only and Windows-only settings in it', async () => {
+    await withDirectory(async (directory) => {
+      await writeFile(join(directory, '.env.windows'), 'DSH_DESKTOP_APP_ID=com.example.windows\n')
+      await writeFile(join(directory, '.env.macos'), 'DSH_DESKTOP_APP_ID=com.example.mac\n')
+      expect(() => loadDesktopPackageEnvironment('linux', RELEASE, directory)).toThrow(/copy .*\.env\.linux\.example/u)
+      await writeFile(join(directory, '.env.linux'), 'APPLE_KEYCHAIN_PROFILE=release\n')
+      expect(() => loadDesktopPackageEnvironment('linux', {}, directory)).toThrow(/unsupported setting APPLE_KEYCHAIN_PROFILE/u)
+      await writeFile(join(directory, '.env.linux'), 'DSH_DESKTOP_WINDOWS_TOKEN_PIN=windows-pin\n')
+      expect(() => loadDesktopPackageEnvironment('linux', {}, directory)).toThrow(/unsupported setting DSH_DESKTOP_WINDOWS_TOKEN_PIN/u)
+    })
+  })
+
+  it('validates an unsigned Linux environment from shared settings alone', () => {
+    const shared = { DSH_DESKTOP_APP_ID: 'com.example.linux', DSH_DESKTOP_NPM_REGISTRY: 'https://registry.npmmirror.com/' }
+    expect(() => { validateDesktopPackageEnvironment(shared, LINUX, { unsigned: true }) }).not.toThrow()
+    expect(() => { validateDesktopPackageEnvironment({ ...shared, ...MAC_IDENTITY }, LINUX, { unsigned: true }) }).not.toThrow()
+    expect(() => { validateDesktopPackageEnvironment({}, LINUX, { unsigned: true }) }).toThrow(/DSH_DESKTOP_APP_ID/u)
+    expect(() => {
+      validateDesktopPackageEnvironment({ ...shared, DSH_DESKTOP_NPM_REGISTRY: 'http://registry.example.com/' }, LINUX, { unsigned: true })
+    }).toThrow(/DSH_DESKTOP_NPM_REGISTRY/u)
+  })
+
+  it.each([{}, { prepareOnly: true }, { unsigned: false }])('requires the explicit unsigned option for Linux in %j', (options) => {
+    expect(() => { validateDesktopPackageEnvironment({ DSH_DESKTOP_APP_ID: 'com.example.linux' }, LINUX, options) }).toThrow(/unsigned/u)
   })
 
   it.each(['win32', 'darwin'] as const)('owns the %s release ID in its platform file', async (platform) => {
